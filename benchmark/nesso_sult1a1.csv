@@ -1,0 +1,7 @@
+ligand,affinity_pred_value,pIC50,ensemble_spread,binder_probability,entropy_crop_pl,n_pocket_residues
+dopamine,1.2188,4.78,0.1172,0.582,0.6099,
+L_DOPA,1.4375,4.56,0.25,0.6094,0.6974,
+m_cresol,1.8125,4.19,0.1328,0.5898,0.4424,
+o_cresol,1.8125,4.19,0.2891,0.5859,0.4002,
+paracetamol,2.25,3.75,0.0156,0.6484,0.5509,110
+p_cresol,2.3906,3.61,0.0312,0.5117,0.3814,

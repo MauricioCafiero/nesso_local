@@ -1,0 +1,13 @@
+{
+  "entropy_pp": 0.18916700780391693,
+  "entropy_pl": 0.3618049621582031,
+  "entropy_ll": 0.025860000401735306,
+  "entropy_crop_pp": 0.27811452746391296,
+  "entropy_crop_pl": 0.48118507862091064,
+  "entropy_crop_ll": 0.025860000401735306,
+  "affinity_pred_value": 2.40625,
+  "affinity_pred_value1": 2.375,
+  "affinity_pred_value2": 2.421875,
+  "affinity_logits_binary": 1.1640625,
+  "affinity_probability_binary": 0.76171875
+}

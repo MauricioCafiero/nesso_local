@@ -1,0 +1,13 @@
+target,ligand,smiles,vina_kcal_mol
+SULT1A3,dopamine,NCCc1cc(O)c(O)cc1,-5.6
+SULT1A3,paracetamol,CC(=O)Nc1ccc(O)cc1,-6.2
+SULT1A3,o_cresol,Cc1ccccc1O,-5.2
+SULT1A3,m_cresol,Cc1cccc(O)c1,-5.3
+SULT1A3,p_cresol,Cc1ccc(O)cc1,-5.4
+SULT1A3,L_DOPA,N[C@@H](Cc1ccc(O)c(O)c1)C(=O)O,-5.6
+SULT1A1,dopamine,NCCc1cc(O)c(O)cc1,-3.3
+SULT1A1,paracetamol,CC(=O)Nc1ccc(O)cc1,-3.1
+SULT1A1,o_cresol,Cc1ccccc1O,-4.0
+SULT1A1,m_cresol,Cc1cccc(O)c1,-4.1
+SULT1A1,p_cresol,Cc1ccc(O)cc1,-4.0
+SULT1A1,L_DOPA,N[C@@H](Cc1ccc(O)c(O)c1)C(=O)O,-1.7
