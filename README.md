@@ -67,6 +67,54 @@ Results land in `outputs/predictions/<record_id>/affinity.json`, where `record_i
 stem of the input YAML. Existing predictions are reused unless you pass `--override`, so
 give each protein–ligand pair its own filename.
 
+## Screening many ligands against one protein
+
+```sh
+.venv/bin/python code/screen_nesso.py target.fasta ligands.smi --name mytarget
+```
+
+The ligand file is one SMILES per line with an optional name in the second column; `#`
+comments and blank lines are ignored, unparseable SMILES are reported and skipped, and
+repeated names are made unique. The script writes one YAML per ligand and hands the whole
+directory to `nesso predict` in a single call, so the model loads once and the protein's
+ESM embedding is computed once for the entire set rather than per ligand. Extra flags
+(`--accelerator cpu`, `--override`, …) pass straight through.
+
+Everything lands in `outputs/screens/<name>/`: the generated `inputs/`, the per-ligand
+`predictions/`, and `results.csv` ranked strongest first, with `affinity_pred_value`,
+pIC50, the ensemble spread, the binder probability, and `entropy_crop_pl` for each ligand.
+The top ten are printed at the end.
+
+A screen resumes cleanly. Ligands that already have an `affinity.json` are skipped on a
+re-run, so an interrupted screen continues where it stopped, and `--collect-only` rebuilds
+`results.csv` from whatever has finished without running any prediction. For a long screen,
+launch it detached so it survives the terminal:
+
+```sh
+.venv/bin/python -c "import subprocess; subprocess.Popen(['.venv/bin/python','code/screen_nesso.py','target.fasta','ligands.smi','--name','mytarget'], stdout=open('outputs/screen.log','ab'), stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)"
+```
+
+### Target size is what sets the runtime
+
+Cost is dominated by the protein, not the ligand: pair representations scale roughly with
+the square of the token count, with larger temporaries inside triangle attention, and the
+cuEquivariance kernels that would cut this are CUDA-only. Measured on an 8 GB M-series
+laptop: ~20-residue peptides run about **2 s per ligand**, while a 384-residue protein takes
+**~170 s for a single ligand** and can exhaust RAM and swap outright — the process pages out
+and wedges rather than merely running slowly.
+
+So a hundred-ligand peptide screen is a few minutes, and the same screen against a real
+protein is hours, if it fits at all. On a memory-constrained machine, watch
+`sysctl vm.swapusage` on a first run, and if a large target is the goal, trade accuracy for
+headroom with `--accelerator cpu`, `--recycling_steps 1` (the default of 5 means six trunk
+passes), `--no_refine_protein_inference`, or a smaller `--refine_protein_tokens_budget`.
+Calibrate any cheapened setting against a few known ligands before trusting a whole screen.
+A stalled run loses nothing — kill it and re-run to resume.
+
+Note that only one ligand per YAML is the `binder`. `code/tutorial_examples/multi_ligand.yaml`
+shows two ligands in one input, but that is a cofactor setup — a single affinity is
+predicted for the designated binder, not one per ligand.
+
 ## Reading the output
 
 * `affinity_pred_value` — log10(IC50 / µM), so **lower is stronger**: −3 ≈ 1 nM, 0 ≈ 1 µM,
