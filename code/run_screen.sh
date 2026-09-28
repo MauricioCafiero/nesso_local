@@ -18,7 +18,11 @@ protein="$1"; ligands="$2"; name="$3"; shift 3
 
 dir="$root/outputs/screens/$name"
 mkdir -p "$dir"
-log="$dir/run.log"
+# One log per attempt, with run.log pointing at the latest. Appending every
+# attempt to a single file leaves stale START/ABORT/END markers behind, which
+# makes a resumed run look like it failed when reading the log.
+log="$dir/run-$(date +%Y%m%d-%H%M%S).log"
+ln -sf "$(basename "$log")" "$dir/run.log"
 
 cat > "$dir/.driver.sh" <<DRIVER
 #!/bin/zsh
