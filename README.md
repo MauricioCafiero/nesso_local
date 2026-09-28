@@ -104,10 +104,24 @@ laptop: ~20-residue peptides run about **2 s per ligand**, while a 384-residue p
 and wedges rather than merely running slowly.
 
 So a hundred-ligand peptide screen is a few minutes, and the same screen against a real
-protein is hours, if it fits at all. On a memory-constrained machine, watch
-`sysctl vm.swapusage` on a first run, and if a large target is the goal, trade accuracy for
-headroom with `--accelerator cpu`, `--recycling_steps 1` (the default of 5 means six trunk
-passes), `--no_refine_protein_inference`, or a smaller `--refine_protein_tokens_budget`.
+protein is hours, if it fits at all. Measured on an 8 GB machine, the 384-residue tutorial
+target needs about **5.7 GB** and stalls the process in uninterruptible wait rather than
+failing cleanly. A 295-residue target needs about **4.0 GB** and finishes in ~3 minutes, so
+on 8 GB the practical ceiling is roughly 300 residues, with no margin to spare.
+
+Peak memory is fixed by the full sequence length and cannot be tuned down after the fact:
+the pair representation is built at full length and the pocket crop only happens after the
+first Pairformer pass, so `--refine_protein_tokens_budget`, `--affinity_protein_cutoff`
+and `--recycling_steps` reduce *time*, not peak memory. What actually helps:
+
+* **A shorter sequence.** Pair memory grows with the square of the token count, so passing
+  only the domain or region around the binding site is the one large reduction available.
+* **`--accelerator cpu`.** Same footprint, but CPU tensors are pageable and compressible
+  where MPS allocations are wired and neither, so a tight machine swaps and finishes
+  slowly instead of wedging.
+* **`PYTORCH_MPS_HIGH_WATERMARK_RATIO`** to cap the MPS allocator, turning a silent stall
+  into a clean out-of-memory error.
+
 Calibrate any cheapened setting against a few known ligands before trusting a whole screen.
 A stalled run loses nothing — kill it and re-run to resume.
 
