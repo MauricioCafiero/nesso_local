@@ -1,0 +1,23 @@
+# Python 3.10–3.13 on Apple silicon (tested with 3.12.13, uv-managed interpreter + python -m venv)
+#
+# nesso is NOT on PyPI yet ("coming soon" per upstream README) — install it with:
+#   pip install "nesso @ git+https://github.com/recursionpharma/nesso.git"
+# (that pulls the pinned runtime deps below automatically; listed here as a record)
+torch==2.14.0
+lightning==2.6.6
+pytorch-lightning==2.6.6
+rdkit==2026.3.6
+transformers==5.17.0
+safetensors==0.8.0
+huggingface_hub==1.33.0
+numpy==2.5.3
+scipy==1.18.1
+einops==0.8.2
+mashumaro==3.22
+click==8.5.0
+pyyaml==6.0.3
+tqdm==4.70.1
+# Jupyter kernel for notebooks
+ipykernel
+# CPU-only test suite (weight-free)
+pytest

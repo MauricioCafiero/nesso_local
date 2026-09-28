@@ -1,0 +1,21 @@
+# environment
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.pytest_cache/
+
+# model cache (never delete — ~3.1 GB of re-downloads)
+.cache/
+
+# generated results (keep the folder itself)
+outputs/*
+!outputs/.gitkeep
+*.log
+
+# local developer notes
+DEVELOPER_NOTES.md
+
+# claude session state
+.claude/
