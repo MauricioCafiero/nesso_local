@@ -19,10 +19,12 @@ The model is small (165 MB of weights) and there is no structure-preparation ste
 makes it practical for volume on modest hardware: the tutorial example takes roughly three
 minutes on an M-series laptop once the cache is warm. That suits
 
-* ranking a set of candidate ligands against one target, especially a target with no
-  solved structure,
-* comparing analogs within a series to see which direction is worth pursuing,
+* separating scaffolds against one target, especially a target with no solved structure,
 * a cheap first-pass filter ahead of docking, free-energy work, or assays.
+
+Benchmarking on a sulfotransferase pair (see [Validation](#validation-sult1a3-vs-sult1a1))
+found it reliable for that coarse separation and unreliable for finer distinctions, so
+ranking close analogues is deliberately not on this list.
 
 What it will not do:
 
@@ -32,8 +34,13 @@ What it will not do:
 * **Aim at a specific pocket.** Pocket conditioning and structural templating are listed
   upstream as not yet implemented, so you cannot point it at one site of a multi-site
   protein.
-* **Replace a measurement.** Treat the output as a ranking signal, and check
-  `entropy_crop_pl` before trusting any single number (see below).
+* **Rank close analogues, or resolve isoform selectivity.** Measured on SULT1A3/SULT1A1:
+  it inverted the published ranking of three cresol isomers and returned near-identical
+  values for two enzymes that differ at the pocket, including the substitutions known to
+  switch their substrate preference. See [Validation](#validation-sult1a3-vs-sult1a1).
+* **Replace a measurement.** Treat the output as a ranking signal. Note that
+  `entropy_crop_pl` read 0.44-0.61 throughout that benchmark, i.e. it looked confident
+  while the rankings were wrong -- it reports placement, not accuracy.
 
 ## Install
 
@@ -152,6 +159,95 @@ outputs/                   prediction results (gitignored)
 
 The tutorial inputs and tests were copied from upstream commit `6c72f66` on 2026-09-28;
 see `code/tutorial_examples/README.md` for what each example does.
+
+## Validation: SULT1A3 vs SULT1A1
+
+Nesso was benchmarked on a system with independent reference data: the sulfotransferase
+pair SULT1A3 and SULT1A1. The two enzymes are **92.9% identical** (21 substitutions over
+295 residues) but differ sharply in substrate preference. SULT1A3 carries a charged back
+pocket — Glu146 pairs with the protonated amine of catecholamines — while SULT1A1 has no
+charged residue there apart from the catalytic lysine and so favours hydrophobic phenols.
+Three of the 21 substitutions (D86A, E89I, E146A) are exactly the triple mutation that
+experimentally converts SULT1A3's dopamine kinetics to SULT1A1-like, and E146A alone raises
+the dopamine Km eightfold (~0.9 log units).
+
+That makes the pair a controlled test: same ligands, near-identical sequences, one
+remodelled pocket.
+
+Six ligands were screened against both isoforms — dopamine, L-DOPA, paracetamol, and o-,
+m- and p-cresol. The same ligands were docked into both with AutoDock Vina, at the
+crystallographic site in each case (2A3R, with L-dopamine bound, and 1LS6, with
+p-nitrophenol), using the tooling in `dock_assist`.
+
+### Nesso does not distinguish the isoforms
+
+| ligand | SULT1A3 | SULT1A1 | delta |
+|---|---|---|---|
+| dopamine | 1.266 | 1.219 | −0.047 |
+| L-DOPA | 1.266 | 1.438 | +0.172 |
+| o-cresol | 1.797 | 1.812 | +0.016 |
+| m-cresol | 1.859 | 1.812 | −0.047 |
+| paracetamol | 2.281 | 2.250 | −0.031 |
+| p-cresol | 2.406 | 2.391 | −0.016 |
+
+Five of six deltas fall within ±0.05. Inference runs in `bf16-mixed` and every output sits
+on the bf16 grid, which steps by ~0.008 in this range, so those shifts are 2–6 steps — the
+model's own output resolution. Where experiment gives ~0.9 log units weaker for dopamine,
+nesso gives 0.047 in the wrong direction.
+
+This is not a case of the model scoring the wrong region. Running with `--save_metadata`
+and decoding `pocket_mask` shows the pocket contains D86, K106, H108 and E146 along with
+all 11 dopamine atoms, and 15 of the 21 substitutions fall inside it. The model has the
+relevant residues in view and is unmoved by changing them. The likely reason is dilution:
+the crop keeps 115 of 295 residues, so a two-residue change in charge character is a small
+perturbation to what the affinity head sees. That crop cannot be tightened from the CLI,
+because it happens after the first full-length Pairformer pass.
+
+### Docking recovers both the ranking and the selectivity
+
+| ligand | Vina 1A3 | Vina 1A1 | delta (kcal/mol) |
+|---|---|---|---|
+| paracetamol | −6.2 | −3.1 | +3.1 |
+| dopamine | −5.6 | −3.3 | +2.3 |
+| L-DOPA | −5.6 | −1.7 | +3.9 |
+| p-cresol | −5.4 | −4.0 | +1.4 |
+| m-cresol | −5.3 | −4.1 | +1.2 |
+| o-cresol | −5.2 | −4.0 | +1.2 |
+
+On SULT1A3 this reproduces published MP2//DFT interaction energies for the same active
+site (acetaminophen −47.93 kcal/mol strongest, p-cresol −41.25, o-cresol −34.69 weakest):
+Vina puts paracetamol first and o-cresol last. Nesso inverts both, ranking o-cresol second
+and paracetamol fifth.
+
+Across the isoform swap the catecholamines lose 2–4 kcal/mol while the cresols lose only
+~1.2, and the ranking inverts on SULT1A1 — the cresols become the best binders, ahead of
+dopamine and paracetamol. That is the expected consequence of replacing a charged back
+pocket with a hydrophobic one.
+
+### Caveats
+
+* The two dockings use different crystal structures, so the uniform part of the 1A3→1A1
+  shift may be a systematic offset between them rather than selectivity. The robust result
+  is the ranking inversion *within* SULT1A1, which involves one structure and one box.
+* L-DOPA's −1.7 on SULT1A1 is a large outlier for the biggest, zwitterionic ligand and may
+  be a docking artefact.
+* Km is a substrate kinetic parameter while nesso predicts an inhibition-style affinity, so
+  the observables are not identical — though no reasonable mismatch turns +0.9 into −0.05.
+* Vina scores fragments this small within a ~1 kcal/mol spread, and neither method resolves
+  m- from p-cresol. Both are coarse.
+
+### What this means in practice
+
+The two methods get reached for in the same situation — rank some ligands against a target,
+quickly, without setting up anything expensive. On cost they are comparable, and nesso is
+the more convenient of the two since it needs only a sequence. On this system the
+physics-based method is the more accurate one: it recovers the reference ranking and the
+isoform selectivity, and nesso does neither.
+
+Nesso separated catechols from monophenols correctly on SULT1A3, which is the coarse
+discrimination it should get right. Treat its output as scaffold-level triage, and do not
+use it to rank close analogues or to reason about isoform selectivity without checking
+against a structure-based method.
 
 ## Tests
 
