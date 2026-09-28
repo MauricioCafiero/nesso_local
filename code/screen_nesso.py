@@ -118,11 +118,35 @@ def main() -> int:
         env["HF_HUB_DISABLE_XET"] = "1"  # xet transfer stalls on weak wifi; LFS resumes
         result = subprocess.run(
             [str(ROOT / ".venv" / "bin" / "nesso"), "predict", str(inputs_dir),
-             "--out_dir", str(screen_dir), *passthrough],
+             "--out_dir", str(screen_dir), "--save_metadata", *passthrough],
             env=env,
         )
         if result.returncode != 0:
             print("nesso predict failed; collecting whatever finished", file=sys.stderr)
+
+    # The pocket the model actually scored. A prediction against the wrong
+    # residues is meaningless however confident it looks, so record it.
+    prot_text = args.protein.read_text()
+    if prot_text.lstrip().startswith(">"):
+        prot_text = "".join(l for l in prot_text.splitlines() if not l.startswith(">"))
+    n_prot = len("".join(prot_text.split()))
+
+    pockets = {}
+    for meta in sorted((screen_dir / "predictions").glob("*/predictions.safetensors")):
+        try:
+            from safetensors.torch import safe_open
+            with safe_open(meta, "pt") as fh:
+                mask = fh.get_tensor("pocket_mask").tolist()
+        except Exception as exc:
+            print(f"  could not read pocket for {meta.parent.name}: {exc}")
+            continue
+        res = [i + 1 for i, v in enumerate(mask) if v and (not n_prot or i < n_prot)]
+        pockets[meta.parent.name] = res
+
+    if pockets:
+        with (screen_dir / "pockets.txt").open("w") as fh:
+            for name, res in sorted(pockets.items()):
+                fh.write(f"{name}\t{len(res)}\t{','.join(map(str, res))}\n")
 
     rows = []
     for path in sorted((screen_dir / "predictions").glob("*/affinity.json")):
@@ -135,6 +159,7 @@ def main() -> int:
             "ensemble_spread": round(abs(d["affinity_pred_value1"] - d["affinity_pred_value2"]), 4),
             "binder_probability": round(d["affinity_probability_binary"], 4),
             "entropy_crop_pl": round(d["entropy_crop_pl"], 4),
+            "n_pocket_residues": len(pockets.get(path.parent.name, [])) or "",
         })
 
     if not rows:
